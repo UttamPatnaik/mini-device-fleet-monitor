@@ -2,7 +2,13 @@ from fastapi import FastAPI, HTTPException, status
 
 from .models import DeviceCreate, DeviceResponse, Heartbeat, SummaryResponse
 from .service import DeviceStore, DuplicateDeviceError, UnknownDeviceError
+import logging
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s",
+)
+logger = logging.getLogger("fleet")
 
 app = FastAPI(title="Mini Device Fleet Monitor")
 store = DeviceStore()
@@ -11,7 +17,9 @@ store = DeviceStore()
 @app.post("/devices", response_model=DeviceResponse, status_code=status.HTTP_201_CREATED)
 def register_device(payload: DeviceCreate) -> DeviceResponse:
     try:
-        return store.register(payload)
+        device = store.register(payload)
+        logger.info("registered device id=%s", payload.id)
+        return device
     except DuplicateDeviceError:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -39,6 +47,7 @@ def get_device(device_id: str) -> DeviceResponse:
 def receive_heartbeat(device_id: str, payload: Heartbeat) -> dict:
     try:
         store.record_heartbeat(device_id, payload)
+        logger.info("heartbeat received id=%s", device_id)
     except UnknownDeviceError:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
